@@ -1,0 +1,28 @@
+version: "3.8"
+services:
+  nifi:
+    build:
+      context: .
+      dockerfile: nifi.dockerfile
+    networks:
+      spark_network:
+        aliases:
+          - nifi
+    ports:
+      - "8080:8080"
+  nifi_registry:
+    build:
+      context: .
+      dockerfile: nifi_registry.dockerfile
+    networks:
+      spark_network:
+        aliases:
+          - nifi_registry
+    volumes:
+      - ./data/nifi_registry/database:/usr/nifi-registry-0.7.0/database
+      - ./data/nifi_registry/flow_storage:/usr/nifi-registry-0.7.0/flow_storage
+      - ./data/nifi_registry/extension_bundles:/usr/nifi-registry-0.7.0/extension_bundles
+    ports:
+      - "18080:18080"
+networks:
+  spark_network:
