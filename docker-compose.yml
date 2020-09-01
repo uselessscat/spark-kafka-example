@@ -10,6 +10,8 @@ services:
           - nifi
     ports:
       - "8080:8080"
+    depends_on:
+      - nifi_registry
   nifi_registry:
     build:
       context: .
@@ -24,5 +26,13 @@ services:
       - ./data/nifi_registry/extension_bundles:/usr/nifi-registry-0.7.0/extension_bundles
     ports:
       - "18080:18080"
+  kafka:
+    build:
+      context: .
+      dockerfile: kafka.dockerfile
+    networks:
+      spark_network:
+        aliases:
+          - kafka
 networks:
   spark_network:

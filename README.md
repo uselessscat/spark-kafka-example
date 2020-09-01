@@ -1,3 +1,4 @@
+# Manual runs
 ## Nifi
 
 ```shell
@@ -13,4 +14,11 @@ docker run -ti --name nifi_registry -p 18080:18080 \
     -v /data/nifi_registry/flow_storage:/usr/nifi-registry-0.7.0/flow_storage \
     -v /data/nifi_registry/extension_bundles:/usr/nifi-registry-0.7.0/extension_bundles \
     nifi_registry:latest
+```
+
+## Kafka
+
+```shell
+docker build -f kafka.dockerfile -t kafka:latest .
+docker run -ti --name kafka kafka:latest
 ```
