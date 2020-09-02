@@ -34,5 +34,13 @@ services:
       spark_network:
         aliases:
           - kafka
+  spark:
+    build:
+      context: .
+      dockerfile: spark.dockerfile
+    networks:
+      spark_network:
+        aliases:
+          - spark
 networks:
   spark_network:

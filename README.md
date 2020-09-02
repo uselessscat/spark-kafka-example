@@ -34,5 +34,17 @@ docker run -ti --name kafka kafka:latest
 
 ```Shell
 docker build -f spark.dockerfile -t spark:latest .
-docker run -ti -v "$(pwd)"/src/scala:/usr/src/scala --name spark spark:latest
+docker run -ti --name spark spark:latest
+```
+
+Run intermediate container
+
+```Shell
+docker build -f spark.dockerfile -t spark:latest --target builder .
+docker run -ti -v "$(pwd)"/code/scala/spark_example_1:/usr/code/scala/spark_example_1 spark:latest
+```
+
+Run spark
+```
+/usr/spark-3.0.0/bin/spark-submit --master local --class "Main" /usr/projects/spark_example_1_app.jar
 ```
