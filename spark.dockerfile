@@ -15,8 +15,11 @@ RUN apt update && \
 
 FROM openjdk:11-jre as builder
 
+ARG SPARK_VERSION
 ARG PROJECT_NAME
 ENV PROJECT_DIR /usr/code/scala/${PROJECT_NAME}
+
+COPY --from=downloader /spark-${SPARK_VERSION}/* /usr/spark-${SPARK_VERSION}
 COPY ./code/scala/${PROJECT_NAME} ${PROJECT_DIR}
 
 RUN echo "deb https://dl.bintray.com/sbt/debian /" | tee -a /etc/apt/sources.list.d/sbt.list && \

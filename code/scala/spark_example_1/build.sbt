@@ -3,8 +3,15 @@ scalaVersion := "2.12.12"
 name := "spark_example_1"
 version := "1.0"
 
+// Use provided with spark-submit
+// libraryDependencies += "org.apache.spark" %% "spark-streaming" % "3.0.0" % "provided"
 libraryDependencies += "org.apache.spark" %% "spark-core" % "3.0.0"
 libraryDependencies += "org.apache.spark" %% "spark-sql" % "3.0.0"
+libraryDependencies += "org.apache.spark" %% "spark-streaming" % "3.0.0"
+
+libraryDependencies += "org.apache.kafka" % "kafka-clients" % "2.6.0"
+libraryDependencies += "org.apache.spark" %% "spark-streaming-kafka-0-10" % "3.0.0"
+
 
 // IMPORTANT NOTE: while build files look _kind of_ like regular Scala, it's
 // important to note that syntax in *.sbt files doesn't always behave like
