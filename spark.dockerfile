@@ -1,5 +1,5 @@
 ARG SPARK_VERSION=3.0.0
-ARG PROJECT_NAME=spark_example_1
+ARG PROJECT_NAME=spark_example_kinesis
 
 FROM debian:latest as downloader
 
