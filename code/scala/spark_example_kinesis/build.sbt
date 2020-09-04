@@ -11,6 +11,8 @@ libraryDependencies += "org.apache.spark" %% "spark-streaming" % "3.0.0"
 
 libraryDependencies += "org.apache.spark" %% "spark-streaming-kinesis-asl" % "3.0.0"
 
+libraryDependencies += "org.apache.parquet" % "parquet-avro" % "1.11.1"
+
 // ============================================================================
 
 // Here's a quick glimpse of what a multi-project build looks like for this
