@@ -73,6 +73,7 @@ class MySeekableInputStream(byteArray: Array[Byte]) extends SeekableInputStream 
 
 class MyInputFile(array: Array[Byte]) extends InputFile {
     override def getLength: Long = array.length
+
     override def newStream(): SeekableInputStream = new MySeekableInputStream(array)
 }
 
@@ -92,7 +93,8 @@ object Main {
         StreamingExamples.setStreamingLogLevels()
 
         val sparkConf = new SparkConf().setMaster("local[*]").setAppName("KinesisTests")
-        val ssc = new StreamingContext(sparkConf, Seconds(2))
+        val sc = new SparkContext(sparkConf)
+        val ssc = new StreamingContext(sc, Seconds(2))
 
         val cred = SparkAWSCredentials.builder.basicCredentials(
             "",
@@ -111,8 +113,7 @@ object Main {
             .kinesisCredentials(cred)
             .build()
 
-        val data = messages.map(bytes => myfun(bytes))
-        data.print()
+        messages.map(bytes => myfun(bytes).toString).print()
 
         ssc.start()
         ssc.awaitTermination()
