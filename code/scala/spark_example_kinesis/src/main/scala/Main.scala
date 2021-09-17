@@ -1,121 +1,103 @@
-import java.io.EOFException
-import java.nio.ByteBuffer
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.nio.charset.StandardCharsets
 
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.commons.collections.collection.TypedCollection
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import org.apache.http.HttpHost
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.expressions.JsonToStructs
+import org.apache.spark.sql.catalyst.json.{JSONOptions, JacksonParser}
+import org.apache.spark.sql.connector.read.streaming.SparkDataStream
+import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.functions._
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.streaming.{Seconds, StreamingContext}
+import org.apache.spark.streaming.{Milliseconds, StreamingContext}
 import org.apache.spark.streaming.kinesis.{KinesisInputDStream, SparkAWSCredentials}
 import org.apache.spark.streaming.kinesis.KinesisInitialPositions.Latest
-import org.apache.avro.generic.GenericRecord
-import org.apache.parquet.avro.AvroParquetReader
-import org.apache.parquet.io.{InputFile, SeekableInputStream}
-import org.xerial.snappy.SnappyInputStream
-
-
-class MySeekableInputStream(byteArray: Array[Byte]) extends SeekableInputStream {
-    private var position: Int = 0
-
-    override def getPos: Long = position
-
-    override def seek(newPos: Long): Unit = {
-        position = newPos.toInt
-    }
-
-    override def readFully(bytes: Array[Byte]): Unit = {
-        readFully(bytes, 0, bytes.length)
-    }
-
-    override def readFully(bytes: Array[Byte], start: Int, len: Int): Unit = {
-        val bytesLeft = byteArray.length - position
-
-        if (bytesLeft >= len) {
-            // if the array provided is pos + len > array.length this might lose bytes
-            byteArray.slice(position, position + len).copyToArray(bytes, start, len)
-            position += len
-        } else {
-            byteArray.slice(position, bytesLeft.toInt).copyToArray(bytes, start, bytesLeft)
-            position += bytesLeft
-
-            throw new EOFException()
-        }
-    }
-
-    override def read(buf: ByteBuffer): Int = {
-        val bufferRemaining = buf.remaining()
-        val bytesAvailable = byteArray.length - position
-        val bytesToWrite = math.min(bufferRemaining, bytesAvailable)
-
-        buf.put(byteArray.slice(position, position + bytesToWrite))
-
-        position += bytesToWrite
-        bytesToWrite
-    }
-
-    override def readFully(buf: ByteBuffer): Unit = {
-        val remaining = buf.remaining()
-        val bytesRead = read(buf)
-
-        if (bytesRead < remaining) {
-            throw new EOFException()
-        }
-    }
-
-    override def read(): Int = {
-        if (position < byteArray.length) {
-            val returnInt = 0xff & byteArray(position).toInt
-            position += 1
-            returnInt
-        } else {
-            -1
-        }
-    }
-}
-
-class MyInputFile(array: Array[Byte]) extends InputFile {
-    override def getLength: Long = array.length
-
-    override def newStream(): SeekableInputStream = new MySeekableInputStream(array)
-}
-
+import org.elasticsearch.client.{RequestOptions, RestClient, RestHighLevelClient}
+import org.elasticsearch.action.index.IndexRequest
+import org.elasticsearch.common.xcontent.XContentType
+import org.json4s.{DefaultFormats, Formats}
+import org.json4s.jackson.Serialization.write
+import schemas.Zbx
+import utils.Decompress
 
 object Main {
-    def myfun(bytes: Array[Byte]): GenericRecord = {
-        val inputFile = new MyInputFile(bytes)
-        // val reader = ParquetFileReader.open(inputFile)
-
-        val parquetReader = AvroParquetReader.builder[GenericRecord](inputFile).build
-
-        parquetReader.read
-    }
-
     def main(args: Array[String]) {
-        // val session = SparkSession.builder().getOrCreate()
+        // scp -i /c/Users/ariel/Desktop/key.pem target/scala-2.12/spark_example_kinesis_2.12-1.0.jar ec2-user@<ip>:/mnt1/project_ariel
         StreamingExamples.setStreamingLogLevels()
 
         val sparkConf = new SparkConf().setMaster("local[*]").setAppName("KinesisTests")
-        val sc = new SparkContext(sparkConf)
-        val ssc = new StreamingContext(sc, Seconds(2))
 
-        val cred = SparkAWSCredentials.builder.basicCredentials(
+        val ss = SparkSession.builder().config(sparkConf).getOrCreate()
+        val ssc = new StreamingContext(ss.sparkContext, Milliseconds(1000))
+
+        val messages = getKinesisStreamingInstance(ssc, "kinesis-zabbix-item-float")
+
+        //ss.sparkContext.hadoopRDD(jobConf, classOf[DynamoDBInputFormat], classOf[Text], classOf[DynamoDBItemWritable])
+
+        messages
+            .map(Decompress.Gzip(_))
+            .flatMap(new String(_, StandardCharsets.UTF_8).split('\n')) // TODO: find a efficient way to convert to string
+            .foreachRDD(rdd => {
+                val session = SparkSession.builder.getOrCreate()
+                import session.implicits._
+
+                val ds: Dataset[String] = rdd.toDS()
+
+                if (!ds.isEmpty) {
+                    val result: Dataset[Zbx] = ds
+                        .select(from_json($"value", Encoders.product[Zbx].schema) as "json")
+                        .select("json.*")
+                        .as[Zbx]
+
+                    var host = result.head().host
+
+                    result.show(10, false)
+                    result.select(count("*")).show()
+
+                    //result.foreach(row => {
+                    //    implicit val formats: Formats = DefaultFormats
+                    //
+                    //    val client = new RestHighLevelClient(
+                    //        RestClient.builder(
+                    //            new HttpHost("", 443, "https")
+                    //        )
+                    //    )
+                    //
+                    //    client.index(new IndexRequest("zabbix-int").source(write(row), XContentType.JSON), RequestOptions.DEFAULT)
+                    //    client.close()
+                    //})
+
+                    //df.as[Zbx].rdd
+                } else {
+                    //session.sparkContext.emptyRDD[Zbx]
+                }
+            })
+
+        ssc.start()
+        ssc.awaitTermination()
+    }
+
+    def getKinesisStreamingInstance(ssc: StreamingContext, stream: String) = {
+        val credentials = SparkAWSCredentials.builder.basicCredentials(
             "",
             ""
         ).build()
 
-        val messages = KinesisInputDStream.builder
+        val region = "us-east-1"
+
+        KinesisInputDStream.builder
             .streamingContext(ssc)
-            .endpointUrl("https://kinesis.us-east-1.amazonaws.com")
-            .regionName("us-east-1")
-            .streamName("NIFI")
+            .endpointUrl(s"https://kinesis.$region.amazonaws.com")
+            .regionName(region)
+            .streamName(stream)
             .initialPosition(new Latest())
-            .checkpointAppName("kinesis-NIFI-checkpoint")
-            .checkpointInterval(Seconds(60 * 10))
+            .checkpointAppName(s"$stream-checkpoint")
+            .checkpointInterval(Milliseconds(1000))
             .storageLevel(StorageLevel.MEMORY_ONLY)
-            .kinesisCredentials(cred)
+            .kinesisCredentials(credentials)
             .build()
-
-        messages.map(bytes => myfun(bytes).toString).print()
-
-        ssc.start()
-        ssc.awaitTermination()
     }
 }

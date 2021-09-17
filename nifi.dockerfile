@@ -1,15 +1,27 @@
-FROM debian:latest as downloader
+ARG NIFI_VERSION=1.12.0
+
+FROM debian:latest as downloader 
+
+ARG NIFI_VERSION
+ENV URL https://downloads.apache.org/nifi/${NIFI_VERSION}/nifi-${NIFI_VERSION}-bin.tar.gz
+ENV URL_TOOLKIT https://downloads.apache.org/nifi/${NIFI_VERSION}/nifi-toolkit-${NIFI_VERSION}-bin.tar.gz
 
 RUN apt update && \
     apt install -y curl && \
-    curl -o /nifi-1.12.0-bin.tar.gz https://downloads.apache.org/nifi/1.12.0/nifi-1.12.0-bin.tar.gz && \
-    mkdir /nifi-1.12.0 && \
-    tar -xzvf /nifi-1.12.0-bin.tar.gz -C /nifi-1.12.0
+    curl -o /tmp/nifi-${NIFI_VERSION}-bin.tar.gz ${URL} && \
+    curl -o /tmp/nifi-toolkit-${NIFI_VERSION}-bin.tar.gz ${URL_TOOLKIT} && \
+    mkdir /nifi-${NIFI_VERSION} && \
+    mkdir /nifi-toolkit-${NIFI_VERSION} && \
+    tar -xzvf /tmp/nifi-${NIFI_VERSION}-bin.tar.gz -C /nifi-${NIFI_VERSION} && \
+    tar -xzvf /tmp/nifi-toolkit-${NIFI_VERSION}-bin.tar.gz -C /nifi-toolkit-${NIFI_VERSION}
 
 # nifi 1.12 uses java 11
 FROM openjdk:11-jre-slim
 
-COPY --from=downloader /nifi-1.12.0 /usr
+ARG NIFI_VERSION
+
+COPY --from=downloader /nifi-${NIFI_VERSION} /usr
+COPY --from=downloader /nifi-toolkit-${NIFI_VERSION} /usr
 
 EXPOSE 8080
 
